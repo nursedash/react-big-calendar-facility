@@ -76,42 +76,16 @@ export function segsOverlap(seg, otherSegs) {
   )
 }
 
-function zIndexSort(zIndexA, zIndexB) {
-  if (zIndexA < zIndexB) {
-    return 1
+export function sortEvents(eventA, eventB, accessors, localizer) {
+  const evtA = {
+    start: accessors.start(eventA),
+    end: accessors.end(eventA),
+    allDay: accessors.allDay(eventA),
   }
-
-  if (zIndexA > zIndexB) {
-    return -1
+  const evtB = {
+    start: accessors.start(eventB),
+    end: accessors.end(eventB),
+    allDay: accessors.allDay(eventB),
   }
-
-  return 0
-}
-
-export function sortEvents(evtA, evtB, accessors) {
-  let startSort =
-    +dates.startOf(accessors.start(evtA), 'day') -
-    +dates.startOf(accessors.start(evtB), 'day')
-
-  let durA = dates.diff(
-    accessors.start(evtA),
-    dates.ceil(accessors.end(evtA), 'day'),
-    'day'
-  )
-
-  let durB = dates.diff(
-    accessors.start(evtB),
-    dates.ceil(accessors.end(evtB), 'day'),
-    'day'
-  )
-
-  const zIndex = zIndexSort(evtA.payload.zIndex, evtB.payload.zIndex)
-
-  return (
-    startSort || // sort by start Day first
-    Math.max(durB, 1) - Math.max(durA, 1) || // events spanning multiple days go first
-    !!accessors.allDay(evtB) - !!accessors.allDay(evtA) || // then allDay single day events
-    zIndex || //custom sort by zIndex
-    +accessors.start(evtA) - +accessors.start(evtB)
-  ) // then sort by start time
+  return localizer.sortEvents({ evtA, evtB })
 }
