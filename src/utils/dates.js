@@ -11,6 +11,7 @@ export {
   endOf,
   add,
   eq,
+  neq,
   gte,
   gt,
   lte,
@@ -32,7 +33,7 @@ const MONTHS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 export function monthsInYear(year) {
   let date = new Date(year, 0, 1)
 
-  return MONTHS.map(i => dates.month(date, i))
+  return MONTHS.map((i) => dates.month(date, i))
 }
 
 export function firstVisibleDay(date, localizer) {
@@ -111,7 +112,9 @@ export function isJustDate(date) {
 export function duration(start, end, unit, firstOfWeek) {
   if (unit === 'day') unit = 'date'
   return Math.abs(
+    // eslint-disable-next-line import/namespace
     dates[unit](start, undefined, firstOfWeek) -
+      // eslint-disable-next-line import/namespace
       dates[unit](end, undefined, firstOfWeek)
   )
 }

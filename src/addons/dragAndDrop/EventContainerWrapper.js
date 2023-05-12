@@ -1,21 +1,15 @@
 import PropTypes from 'prop-types'
 import React from 'react'
-import * as dates from '../../utils/dates'
-import { findDOMNode } from 'react-dom'
+import { DnDContext } from './DnDContext'
+import { scrollParent, scrollTop } from 'dom-helpers'
+import qsa from 'dom-helpers/cjs/querySelectorAll'
 
 import Selection, {
   getBoundsForNode,
   getEventNodeFromPoint,
 } from '../../Selection'
 import TimeGridEvent from '../../TimeGridEvent'
-import { dragAccessors } from './common'
-import NoopWrapper from '../../NoopWrapper'
-
-const pointInColumn = (bounds, { x, y }) => {
-  const { left, right, top } = bounds
-  return x < right + 10 && x > left && y > top
-}
-const propTypes = {}
+import { dragAccessors, eventTimes, pointInColumn } from './common'
 
 class EventContainerWrapper extends React.Component {
   static propTypes = {
@@ -27,20 +21,12 @@ class EventContainerWrapper extends React.Component {
     resource: PropTypes.any,
   }
 
-  static contextTypes = {
-    draggable: PropTypes.shape({
-      onStart: PropTypes.func,
-      onEnd: PropTypes.func,
-      onDropFromOutside: PropTypes.func,
-      onBeginAction: PropTypes.func,
-      dragAndDropAction: PropTypes.object,
-      dragFromOutsideItem: PropTypes.func,
-    }),
-  }
+  static contextType = DnDContext
 
   constructor(...args) {
     super(...args)
     this.state = {}
+    this.ref = React.createRef()
   }
 
   componentDidMount() {
@@ -73,46 +59,55 @@ class EventContainerWrapper extends React.Component {
     })
   }
 
-  handleMove = (point, boundaryBox) => {
+  handleMove = (point, bounds) => {
+    if (!pointInColumn(bounds, point)) return this.reset()
     const { event } = this.context.draggable.dragAndDropAction
     const { accessors, slotMetrics } = this.props
 
-    if (!pointInColumn(boundaryBox, point)) {
-      this.reset()
-      return
-    }
-
-    let currentSlot = slotMetrics.closestSlotFromPoint(
+    const newSlot = slotMetrics.closestSlotFromPoint(
       { y: point.y - this.eventOffsetTop, x: point.x },
-      boundaryBox
+      bounds
     )
 
-    let eventStart = accessors.start(event)
-    let eventEnd = accessors.end(event)
-    let end = dates.add(
-      currentSlot,
-      dates.diff(eventStart, eventEnd, 'minutes'),
-      'minutes'
-    )
-
-    this.update(event, slotMetrics.getRange(currentSlot, end, false, true))
+    const { duration } = eventTimes(event, accessors, this.props.localizer)
+    let newEnd = this.props.localizer.add(newSlot, duration, 'milliseconds')
+    this.update(event, slotMetrics.getRange(newSlot, newEnd, false, true))
   }
 
-  handleResize(point, boundaryBox) {
-    let start, end
-    const { accessors, slotMetrics } = this.props
+  handleResize(point, bounds) {
+    const { accessors, slotMetrics, localizer } = this.props
     const { event, direction } = this.context.draggable.dragAndDropAction
+    const newTime = slotMetrics.closestSlotFromPoint(point, bounds)
 
-    let currentSlot = slotMetrics.closestSlotFromPoint(point, boundaryBox)
+    let { start, end } = eventTimes(event, accessors, localizer)
+    let newRange
     if (direction === 'UP') {
-      end = accessors.end(event)
-      start = dates.min(currentSlot, slotMetrics.closestSlotFromDate(end, -1))
+      const newStart = localizer.min(
+        newTime,
+        slotMetrics.closestSlotFromDate(end, -1)
+      )
+      // Get the new range based on the new start
+      // but don't overwrite the end date as it could be outside this day boundary.
+      newRange = slotMetrics.getRange(newStart, end)
+      newRange = {
+        ...newRange,
+        endDate: end,
+      }
     } else if (direction === 'DOWN') {
-      start = accessors.start(event)
-      end = dates.max(currentSlot, slotMetrics.closestSlotFromDate(start))
+      // Get the new range based on the new end
+      // but don't overwrite the start date as it could be outside this day boundary.
+      const newEnd = localizer.max(
+        newTime,
+        slotMetrics.closestSlotFromDate(start)
+      )
+      newRange = slotMetrics.getRange(start, newEnd)
+      newRange = {
+        ...newRange,
+        startDate: start,
+      }
     }
 
-    this.update(event, slotMetrics.getRange(start, end))
+    this.update(event, newRange)
   }
 
   handleDropFromOutside = (point, boundaryBox) => {
@@ -131,14 +126,40 @@ class EventContainerWrapper extends React.Component {
     })
   }
 
+  updateParentScroll = (parent, node) => {
+    setTimeout(() => {
+      const draggedEl = qsa(node, '.rbc-addons-dnd-drag-preview')[0]
+      if (draggedEl) {
+        if (draggedEl.offsetTop < parent.scrollTop) {
+          scrollTop(parent, Math.max(draggedEl.offsetTop, 0))
+        } else if (
+          draggedEl.offsetTop + draggedEl.offsetHeight >
+          parent.scrollTop + parent.clientHeight
+        ) {
+          scrollTop(
+            parent,
+            Math.min(
+              draggedEl.offsetTop -
+                parent.offsetHeight +
+                draggedEl.offsetHeight,
+              parent.scrollHeight
+            )
+          )
+        }
+      }
+    })
+  }
+
   _selectable = () => {
-    let node = findDOMNode(this)
+    let wrapper = this.ref.current
+    let node = wrapper.children[0]
     let isBeingDragged = false
     let selector = (this._selector = new Selection(() =>
-      node.closest('.rbc-time-view')
+      wrapper.closest('.rbc-time-view')
     ))
+    let parent = scrollParent(wrapper)
 
-    selector.on('beforeSelect', point => {
+    selector.on('beforeSelect', (point) => {
       const { dragAndDropAction } = this.context.draggable
 
       if (!dragAndDropAction.action) return false
@@ -149,32 +170,39 @@ class EventContainerWrapper extends React.Component {
       const eventNode = getEventNodeFromPoint(node, point)
       if (!eventNode) return false
 
+      // eventOffsetTop is distance from the top of the event to the initial
+      // mouseDown position. We need this later to compute the new top of the
+      // event during move operations, since the final location is really a
+      // delta from this point. note: if we want to DRY this with WeekWrapper,
+      // probably better just to capture the mouseDown point here and do the
+      // placement computation in handleMove()...
       this.eventOffsetTop = point.y - getBoundsForNode(eventNode).top
     })
 
-    selector.on('selecting', box => {
+    selector.on('selecting', (box) => {
       const bounds = getBoundsForNode(node)
       const { dragAndDropAction } = this.context.draggable
 
-      if (dragAndDropAction.action === 'move') this.handleMove(box, bounds)
-      if (dragAndDropAction.action === 'resize') this.handleResize(box, bounds)
+      if (dragAndDropAction.action === 'move') {
+        this.updateParentScroll(parent, node)
+        this.handleMove(box, bounds)
+      }
+      if (dragAndDropAction.action === 'resize') {
+        this.updateParentScroll(parent, node)
+        this.handleResize(box, bounds)
+      }
     })
 
-    selector.on('dropFromOutside', point => {
+    selector.on('dropFromOutside', (point) => {
       if (!this.context.draggable.onDropFromOutside) return
-
       const bounds = getBoundsForNode(node)
-
       if (!pointInColumn(bounds, point)) return
-
       this.handleDropFromOutside(point, bounds)
     })
 
-    selector.on('dragOver', point => {
+    selector.on('dragOver', (point) => {
       if (!this.context.draggable.dragFromOutsideItem) return
-
       const bounds = getBoundsForNode(node)
-
       this.handleDropFromOutside(point, bounds)
     })
 
@@ -183,18 +211,23 @@ class EventContainerWrapper extends React.Component {
       this.context.draggable.onStart()
     })
 
-    selector.on('select', point => {
+    selector.on('select', (point) => {
       const bounds = getBoundsForNode(node)
       isBeingDragged = false
-      if (!this.state.event || !pointInColumn(bounds, point)) return
-      this.handleInteractionEnd()
+      const { dragAndDropAction } = this.context.draggable
+      if (dragAndDropAction.action === 'resize') {
+        this.handleInteractionEnd()
+      } else if (!this.state.event || !pointInColumn(bounds, point)) {
+        return
+      } else {
+        this.handleInteractionEnd()
+      }
     })
 
     selector.on('click', () => {
       if (isBeingDragged) this.reset()
       this.context.draggable.onEnd(null)
     })
-
     selector.on('reset', () => {
       this.reset()
       this.context.draggable.onEnd(null)
@@ -204,7 +237,6 @@ class EventContainerWrapper extends React.Component {
   handleInteractionEnd = () => {
     const { resource } = this.props
     const { event } = this.state
-
     this.reset()
 
     this.context.draggable.onEnd({
@@ -220,18 +252,11 @@ class EventContainerWrapper extends React.Component {
     this._selector = null
   }
 
-  render() {
-    const {
-      children,
-      accessors,
-      components,
-      getters,
-      slotMetrics,
-      localizer,
-    } = this.props
+  renderContent() {
+    const { children, accessors, components, getters, slotMetrics, localizer } =
+      this.props
 
     let { event, top, height } = this.state
-
     if (!event) return children
 
     const events = children.props.children
@@ -261,18 +286,20 @@ class EventContainerWrapper extends React.Component {
               className="rbc-addons-dnd-drag-preview"
               style={{ top, height, width: 100 }}
               getters={getters}
-              components={{ ...components, eventWrapper: NoopWrapper }}
+              components={components}
               accessors={{ ...accessors, ...dragAccessors }}
-              continuesEarlier={startsBeforeDay}
-              continuesLater={startsAfterDay}
+              continuesPrior={startsBeforeDay}
+              continuesAfter={startsAfterDay}
             />
           )}
         </React.Fragment>
       ),
     })
   }
-}
 
-EventContainerWrapper.propTypes = propTypes
+  render() {
+    return <div ref={this.ref}>{this.renderContent()}</div>
+  }
+}
 
 export default EventContainerWrapper
