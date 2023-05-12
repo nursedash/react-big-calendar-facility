@@ -81,11 +81,13 @@ export function sortEvents(eventA, eventB, accessors, localizer) {
     start: accessors.start(eventA),
     end: accessors.end(eventA),
     allDay: accessors.allDay(eventA),
+    zIndex: accessors.zIndex(eventA),
   }
   const evtB = {
     start: accessors.start(eventB),
     end: accessors.end(eventB),
     allDay: accessors.allDay(eventB),
+    zIndex: accessors.zIndex(eventB),
   }
   return localizer.sortEvents({ evtA, evtB })
 }

@@ -101,8 +101,8 @@ function zIndexSort(zIndexA, zIndexB) {
 
 // These two are used by eventLevels
 function sortEvents({
-  evtA: { start: aStart, end: aEnd, allDay: aAllDay },
-  evtB: { start: bStart, end: bEnd, allDay: bAllDay },
+  evtA: { start: aStart, end: aEnd, allDay: aAllDay,  zIndex: aZIndex },
+  evtB: { start: bStart, end: bEnd, allDay: bAllDay, zIndex: bZIndex },
 }) {
   let startSort = +startOf(aStart, 'day') - +startOf(bStart, 'day')
 
@@ -110,7 +110,7 @@ function sortEvents({
 
   let durB = diff(bStart, ceil(bEnd, 'day'), 'day')
 
-  const zIndex = zIndexSort(evtA.payload.zIndex, evtB.payload.zIndex);
+  const zIndex = zIndexSort(aZIndex, bZIndex);
 
   return (
     startSort || // sort by start Day first
