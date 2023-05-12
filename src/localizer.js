@@ -87,6 +87,18 @@ function continuesAfter(start, end, last) {
     : gt(end, last, 'minutes')
 }
 
+function zIndexSort(zIndexA, zIndexB) {
+  if (zIndexA < zIndexB) {
+    return 1
+  }
+
+  if (zIndexA > zIndexB) {
+    return -1
+  }
+
+  return 0
+}
+
 // These two are used by eventLevels
 function sortEvents({
   evtA: { start: aStart, end: aEnd, allDay: aAllDay },
@@ -98,10 +110,13 @@ function sortEvents({
 
   let durB = diff(bStart, ceil(bEnd, 'day'), 'day')
 
+  const zIndex = zIndexSort(evtA.payload.zIndex, evtB.payload.zIndex);
+
   return (
     startSort || // sort by start Day first
     Math.max(durB, 1) - Math.max(durA, 1) || // events spanning multiple days go first
     !!bAllDay - !!aAllDay || // then allDay single day events
+    zIndex || //custom sort by zIndex
     +aStart - +bStart || // then sort by start time
     +aEnd - +bEnd // then sort by end time
   )
