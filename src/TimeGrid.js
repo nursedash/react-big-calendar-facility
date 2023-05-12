@@ -1,11 +1,9 @@
+import React, { Component, createRef } from 'react'
 import PropTypes from 'prop-types'
 import clsx from 'clsx'
 import * as animationFrame from 'dom-helpers/animationFrame'
-import React, { Component } from 'react'
-import { findDOMNode } from 'react-dom'
 import memoize from 'memoize-one'
 
-import * as dates from './utils/dates'
 import DayColumn from './DayColumn'
 import TimeGutter from './TimeGutter'
 
@@ -25,25 +23,26 @@ export default class TimeGrid extends Component {
     this.scrollRef = React.createRef()
     this.contentRef = React.createRef()
     this._scrollRatio = null
+    this.gutterRef = createRef()
   }
 
-  UNSAFE_componentWillMount() {
-    this.calculateScroll()
+  getSnapshotBeforeUpdate() {
+    this.checkOverflow()
+    return null
   }
 
   componentDidMount() {
-    this.checkOverflow()
-
     if (this.props.width == null) {
       this.measureGutter()
     }
 
+    this.calculateScroll()
     this.applyScroll()
 
     window.addEventListener('resize', this.handleResize)
   }
 
-  handleScroll = e => {
+  handleScroll = (e) => {
     if (this.scrollRef.current) {
       this.scrollRef.current.scrollLeft = e.target.scrollLeft
     }
@@ -65,27 +64,7 @@ export default class TimeGrid extends Component {
   }
 
   componentDidUpdate() {
-    if (this.props.width == null) {
-      this.measureGutter()
-    }
-
     this.applyScroll()
-    //this.checkOverflow()
-  }
-
-  UNSAFE_componentWillReceiveProps(nextProps) {
-    const { range, scrollToTime } = this.props
-    // When paginating, reset scroll
-    if (
-      !dates.eq(nextProps.range[0], range[0], 'minute') ||
-      !dates.eq(nextProps.scrollToTime, scrollToTime, 'minute')
-    ) {
-      this.calculateScroll(nextProps)
-    }
-  }
-
-  gutterRef = ref => {
-    this.gutter = ref && findDOMNode(ref)
   }
 
   handleSelectAlldayEvent = (...args) => {
@@ -96,24 +75,23 @@ export default class TimeGrid extends Component {
 
   handleSelectAllDaySlot = (slots, slotInfo) => {
     const { onSelectSlot } = this.props
+
+    const start = new Date(slots[0])
+    const end = new Date(slots[slots.length - 1])
+    end.setDate(slots[slots.length - 1].getDate() + 1)
+
     notify(onSelectSlot, {
       slots,
-      start: slots[0],
-      end: slots[slots.length - 1],
+      start,
+      end,
       action: slotInfo.action,
       resourceId: slotInfo.resourceId,
     })
   }
 
   renderEvents(range, events, backgroundEvents, now) {
-    let {
-      min,
-      max,
-      components,
-      accessors,
-      localizer,
-      dayLayoutAlgorithm,
-    } = this.props
+    let { min, max, components, accessors, localizer, dayLayoutAlgorithm } =
+      this.props
 
     const resources = this.memoizedResources(this.props.resources, accessors)
     const groupedEvents = resources.groupEvents(events)
@@ -121,8 +99,8 @@ export default class TimeGrid extends Component {
 
     return resources.map(([id, resource], i) =>
       range.map((date, jj) => {
-        let daysEvents = (groupedEvents.get(id) || []).filter(event =>
-          dates.inRange(
+        let daysEvents = (groupedEvents.get(id) || []).filter((event) =>
+          localizer.inRange(
             date,
             accessors.start(event),
             accessors.end(event),
@@ -132,8 +110,8 @@ export default class TimeGrid extends Component {
 
         let daysBackgroundEvents = (
           groupedBackgroundEvents.get(id) || []
-        ).filter(event =>
-          dates.inRange(
+        ).filter((event) =>
+          localizer.inRange(
             date,
             accessors.start(event),
             accessors.end(event),
@@ -145,11 +123,11 @@ export default class TimeGrid extends Component {
           <DayColumn
             {...this.props}
             localizer={localizer}
-            min={dates.merge(date, min)}
-            max={dates.merge(date, max)}
+            min={localizer.merge(date, min)}
+            max={localizer.merge(date, max)}
             resource={resource && id}
             components={components}
-            isNow={dates.eq(date, now, 'day')}
+            isNow={localizer.isSameDate(date, now)}
             key={i + '-' + jj}
             date={date}
             events={daysEvents}
@@ -193,15 +171,15 @@ export default class TimeGrid extends Component {
       rangeEvents = [],
       rangeBackgroundEvents = []
 
-    events.forEach(event => {
-      if (inRange(event, start, end, accessors)) {
+    events.forEach((event) => {
+      if (inRange(event, start, end, accessors, localizer)) {
         let eStart = accessors.start(event),
           eEnd = accessors.end(event)
 
         if (
           accessors.allDay(event) ||
-          (dates.isJustDate(eStart) && dates.isJustDate(eEnd)) ||
-          (!showMultiDayTimes && !dates.eq(eStart, eEnd, 'day'))
+          localizer.startAndEndAreDateOnly(eStart, eEnd) ||
+          (!showMultiDayTimes && !localizer.isSameDate(eStart, eEnd))
         ) {
           allDayEvents.push(event)
         } else {
@@ -210,13 +188,13 @@ export default class TimeGrid extends Component {
       }
     })
 
-    backgroundEvents.forEach(event => {
-      if (inRange(event, start, end, accessors)) {
+    backgroundEvents.forEach((event) => {
+      if (inRange(event, start, end, accessors, localizer)) {
         rangeBackgroundEvents.push(event)
       }
     })
 
-    allDayEvents.sort((a, b) => sortEvents(a, b, accessors))
+    allDayEvents.sort((a, b) => sortEvents(a, b, accessors, localizer))
 
     return (
       <div
@@ -258,8 +236,8 @@ export default class TimeGrid extends Component {
             date={start}
             ref={this.gutterRef}
             localizer={localizer}
-            min={dates.merge(start, min)}
-            max={dates.merge(start, max)}
+            min={localizer.merge(start, min)}
+            max={localizer.merge(start, max)}
             step={this.props.step}
             getNow={this.props.getNow}
             timeslots={this.props.timeslots}
@@ -289,7 +267,9 @@ export default class TimeGrid extends Component {
     }
     this.measureGutterAnimationFrameRequest = window.requestAnimationFrame(
       () => {
-        const width = getWidth(this.gutter)
+        const width = this.gutterRef?.current
+          ? getWidth(this.gutterRef.current)
+          : undefined
 
         if (width && this.state.gutterWidth !== width) {
           this.setState({ gutterWidth: width })
@@ -299,7 +279,8 @@ export default class TimeGrid extends Component {
   }
 
   applyScroll() {
-    if (this._scrollRatio != null) {
+    // If auto-scroll is disabled, we don't actually apply the scroll
+    if (this._scrollRatio != null && this.props.enableAutoScroll === true) {
       const content = this.contentRef.current
       content.scrollTop = content.scrollHeight * this._scrollRatio
       // Only do this once
@@ -308,10 +289,10 @@ export default class TimeGrid extends Component {
   }
 
   calculateScroll(props = this.props) {
-    const { min, max, scrollToTime } = props
+    const { min, max, scrollToTime, localizer } = props
 
-    const diffMillis = scrollToTime - dates.startOf(scrollToTime, 'day')
-    const totalMillis = dates.diff(max, min)
+    const diffMillis = scrollToTime - localizer.startOf(scrollToTime, 'day')
+    const totalMillis = localizer.diff(min, max, 'milliseconds')
 
     this._scrollRatio = diffMillis / totalMillis
   }
@@ -343,11 +324,12 @@ TimeGrid.propTypes = {
   step: PropTypes.number,
   timeslots: PropTypes.number,
   range: PropTypes.arrayOf(PropTypes.instanceOf(Date)),
-  min: PropTypes.instanceOf(Date),
-  max: PropTypes.instanceOf(Date),
+  min: PropTypes.instanceOf(Date).isRequired,
+  max: PropTypes.instanceOf(Date).isRequired,
   getNow: PropTypes.func.isRequired,
 
-  scrollToTime: PropTypes.instanceOf(Date),
+  scrollToTime: PropTypes.instanceOf(Date).isRequired,
+  enableAutoScroll: PropTypes.bool,
   showMultiDayTimes: PropTypes.bool,
 
   rtl: PropTypes.bool,
@@ -379,7 +361,4 @@ TimeGrid.propTypes = {
 TimeGrid.defaultProps = {
   step: 30,
   timeslots: 2,
-  min: dates.startOf(new Date(), 'day'),
-  max: dates.endOf(new Date(), 'day'),
-  scrollToTime: dates.startOf(new Date(), 'day'),
 }
