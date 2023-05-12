@@ -225,19 +225,6 @@ class Calendar extends React.Component {
      */
     endAccessor: accessor,
 
-
-    /**
-     * The zIndex of the event. Must resolve to a JavaScript `number` object.
-     *
-     * ```js
-     * string | (event: Object) => Date
-     * ```
-     *
-     * @type {(func|number)}
-     */
-    zIndexAccessor: accessor,
-
-
     /**
      * Returns the id of the `resource` that the event is a member of. This
      * id should match at least one resource in the `resources` array.
@@ -886,7 +873,6 @@ class Calendar extends React.Component {
     tooltipAccessor: 'title',
     allDayAccessor: 'allDay',
     startAccessor: 'start',
-    zIndexAccessor: 'zIndex',
     endAccessor: 'end',
     resourceAccessor: 'resourceId',
 
@@ -913,7 +899,6 @@ class Calendar extends React.Component {
     startAccessor,
     endAccessor,
     allDayAccessor,
-    zIndexAccessor,
     tooltipAccessor,
     titleAccessor,
     resourceAccessor,
@@ -961,7 +946,6 @@ class Calendar extends React.Component {
       accessors: {
         start: wrapAccessor(startAccessor),
         end: wrapAccessor(endAccessor),
-        zIndex: wrapAccessor(zIndexAccessor),
         allDay: wrapAccessor(allDayAccessor),
         tooltip: wrapAccessor(tooltipAccessor),
         title: wrapAccessor(titleAccessor),

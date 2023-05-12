@@ -28,7 +28,6 @@ export const accessorStoryArgs = {
   titleAccessor: 'label',
   tooltipAccessor: 'label',
   startAccessor: 'startDate',
-  zIndexAccessor: 'zIndex',
 }
 /** END Specific to event key accessors */
 

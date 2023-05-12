@@ -479,17 +479,22 @@ describe('sortEvents', () => {
     start: (e) => e.start,
     end: (e) => e.end,
     allDay: (e) => e.allDay,
-    zIndex: (e) => e.zIndex,
   }
 
   describe('when the events start on different calendar days', () => {
     const earlierEvent = {
       start: new Date(2017, 0, 1),
       end: new Date(2017, 0, 3),
+      payload: {
+        zIndex: 0,
+      },
     }
     const laterEvent = {
       start: new Date(2017, 0, 2),
       end: new Date(2017, 0, 3),
+      payload: {
+        zIndex: 0,
+      },
     }
 
     test('it returns a positive number when event B starts on a day before the start day of event A', () => {
@@ -510,10 +515,16 @@ describe('sortEvents', () => {
       const shorterEvent = {
         start: new Date(2017, 0, 1),
         end: new Date(2017, 0, 2),
+        payload: {
+          zIndex: 0,
+        },
       }
       const longerEvent = {
         start: new Date(2017, 0, 1),
         end: new Date(2017, 0, 4),
+        payload: {
+          zIndex: 0,
+        },
       }
 
       test('it returns a positive number when event B has a longer duration than event A', () => {
@@ -545,11 +556,17 @@ describe('sortEvents', () => {
           start: new Date(2017, 0, 1),
           end: new Date(2017, 0, 2),
           allDay: true,
+          payload: {
+            zIndex: 0,
+          },
         }
         const nonAllDayEvent = {
           start: new Date(2017, 0, 1),
           end: new Date(2017, 0, 2),
           allDay: false,
+          payload: {
+            zIndex: 0,
+          },
         }
 
         test('it returns a positive number when event B is an all day event', () => {
@@ -580,11 +597,17 @@ describe('sortEvents', () => {
           start: new Date(2017, 0, 1),
           end: new Date(2017, 0, 2),
           allDay: true,
+          payload: {
+            zIndex: 0,
+          },
         }
         const otherAllDayEvent = {
           start: new Date(2017, 0, 1),
           end: new Date(2017, 0, 2),
           allDay: true,
+          payload: {
+            zIndex: 0,
+          },
         }
 
         test('it returns zero', () => {
@@ -604,11 +627,17 @@ describe('sortEvents', () => {
           start: new Date(2017, 0, 1, 12),
           end: new Date(2017, 0, 2),
           allDay: false,
+          payload: {
+            zIndex: 0,
+          },
         }
         const laterEvent = {
           start: new Date(2017, 0, 1, 16),
           end: new Date(2017, 0, 2),
           allDay: false,
+          payload: {
+            zIndex: 0,
+          },
         }
 
         test('it returns a positive number when event B starts at an earlier time than event A', () => {
