@@ -328,8 +328,8 @@ export default function (dayjsLib) {
       Math.max(durB, 1) - Math.max(durA, 1) || // events spanning multiple days go first
       !!bAllDay - !!aAllDay || // then allDay single day events
       zIndex || //custom sort by zIndex
-      +aStart - +bStart || // then sort by start time *don't need moment conversion here
-      +aEnd - +bEnd // then sort by end time *don't need moment conversion here either
+      +aStart - +bStart || // then sort by start time *don't need dayjs conversion here
+      +aEnd - +bEnd // then sort by end time *don't need dayjs conversion here either
     )
   }
 
