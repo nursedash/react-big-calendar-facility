@@ -308,10 +308,22 @@ export default function (DateTime, { firstDayOfWeek = 7 } = {}) {
     return gte(end, last)
   }
 
+  function zIndexSort(zIndexA, zIndexB) {
+    if (zIndexA < zIndexB) {
+      return 1
+    }
+
+    if (zIndexA > zIndexB) {
+      return -1
+    }
+
+    return 0
+  }
+
   // These two are used by eventLevels
   function sortEvents({
-    evtA: { start: aStart, end: aEnd, allDay: aAllDay },
-    evtB: { start: bStart, end: bEnd, allDay: bAllDay },
+    evtA: { start: aStart, end: aEnd, allDay: aAllDay, zIndex: aZIndex },
+    evtB: { start: bStart, end: bEnd, allDay: bAllDay, zIndex: bZIndex },
   }) {
     const startSort = +startOf(aStart, 'day') - +startOf(bStart, 'day')
 
@@ -319,10 +331,13 @@ export default function (DateTime, { firstDayOfWeek = 7 } = {}) {
 
     const durB = diff(bStart, ceil(bEnd, 'day'), 'day')
 
+    const zIndex = zIndexSort(aZIndex, bZIndex)
+
     return (
       startSort || // sort by start Day first
       Math.max(durB, 1) - Math.max(durA, 1) || // events spanning multiple days go first
       !!bAllDay - !!aAllDay || // then allDay single day events
+      zIndex || //custom sort by zIndex
       +aStart - +bStart || // then sort by start time *don't need moment conversion here
       +aEnd - +bEnd // then sort by end time *don't need moment conversion here either
     )
